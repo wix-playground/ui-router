@@ -87,8 +87,7 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
     views: function(state) {
       var views = {}, keys = ['templateProvider', 'templateUrl', 'template', 'controller', 'notify', 'async'];
 
-      forEach(isDefined(state.views) ? state.views : { '': state }, function (view, name) {
-        if (name.indexOf('@') < 0) name += '@' + state.parent.name;
+      forEach(isDefined(state.views) ? state.views : { "$unnamed$": state }, function (view, name) {
         views[name] = filterByKeys(keys, view);
       });
       return views;
@@ -607,11 +606,15 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       var toPath = to.path;
 
       // Starting from the root of the path, keep all levels that haven't changed
-      var keep, state, locals = root.locals, toLocals = [];
+      var keep, state, locals = root.locals, toLocals = [], keptViews = [];
       for (keep = 0, state = toPath[keep];
            state && state === fromPath[keep] && equalForKeys(toParams, fromParams, state.ownParams) && !options.reload;
            keep++, state = toPath[keep]) {
         locals = toLocals[keep] = state.locals;
+
+        angular.forEach(state.views, function(config, key) {
+          keptViews.push($view.find(key, state.parent) || key);
+        });
       }
 
       // If we're going to the same state and all locals are kept, we've got nothing to do.
@@ -664,6 +667,11 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
           exiting = fromPath[l];
           if (exiting.self.onExit) {
             $injector.invoke(exiting.self.onExit, exiting.self, exiting.locals.globals);
+          }
+          if (exiting.views) {
+            angular.forEach($view.find(keys(exiting.views), exiting.parent), function(name) {
+              if (arraySearch(keptViews, name) === -1) $view.reset(name, null);
+            });
           }
           exiting.locals = null;
         }
@@ -880,20 +888,15 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       // Resolve template and dependencies for all views.
       forEach(state.views, function (view, name) {
         var injectables = (view.resolve && view.resolve !== state.resolve ? view.resolve : {});
-        injectables.$template = [ function () {
-          return $view.load(name, extend({ notify: false }, view, { locals: locals, params: $stateParams })) || '';
-        }];
+
+        promises.push($view.load(name, extend({ notify: false }, view, {
+          locals: extend({}, locals, injectables),
+          params: $stateParams,
+          context: state,
+          parent: (name.indexOf(".") > -1 || state.parent === root) ? null : state.parent
+        })));
 
         promises.push($resolve.resolve(injectables, locals, dst.resolve, state).then(function (result) {
-          // References to the controller (only instantiated at link time)
-          if (isFunction(view.controllerProvider) || isArray(view.controllerProvider)) {
-            var injectLocals = angular.extend({}, injectables, locals);
-            result.$$controller = $injector.invoke(view.controllerProvider, null, injectLocals);
-          } else {
-            result.$$controller = view.controller;
-          }
-          // Provide access to the state itself for internal use
-          result.$$state = state;
           dst[name] = result;
         }));
       });

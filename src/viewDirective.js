@@ -15,8 +15,8 @@
  *
  * @param {string} ui-view A view name.
  */
-$ViewDirective.$inject = ['$state', '$compile', '$controller', '$injector', '$uiViewScroll', '$document'];
-function $ViewDirective(   $state,   $compile,   $controller,   $injector,   $uiViewScroll,   $document) {
+$ViewDirective.$inject = ['$state', '$view', '$compile', '$controller', '$injector', '$uiViewScroll', '$document'];
+function $ViewDirective(   $state,   $view,   $compile,   $controller,   $injector,   $uiViewScroll,   $document) {
 
   function getService() {
     return ($injector.has) ? function(service) {
@@ -81,28 +81,32 @@ function $ViewDirective(   $state,   $compile,   $controller,   $injector,   $ui
       return function ($scope) {
         var inherited = parentEl.inheritedData('$uiView');
 
-        var currentScope, currentEl, viewLocals,
+        var currentScope, currentEl, viewConfig,
             name      = attrs[directive.name] || attrs.name || '',
             onloadExp = attrs.onload || '',
             autoscrollExp = attrs.autoscroll,
             renderer  = getRenderer(element, attrs, $scope);
 
-        if (name.indexOf('@') < 0) name = name + '@' + (inherited ? inherited.state.name : '');
-        var view = { name: name, state: null };
+        // Find the details of the parent view directive (if any) and use it
+        // to derive our own qualified view name, then hang our own details
+        // off the DOM so child directives can find it.
+        var viewData = { name: inherited ? inherited.name + "." + name : name };
+        element.data('$uiView', viewData);
 
-        var eventHook = function () {
-          if (viewIsUpdating) return;
-          viewIsUpdating = true;
+        unregister = $view.register(viewData.name, function(config) {
+          var nothingToDo = (config === viewConfig) || (config && viewConfig && (
+            config.$controller === viewConfig.$controller &&
+            config.$template   === viewConfig.$template &&
+            config.$locals     === viewConfig.$locals
+          ));
+          if (nothingToDo) return;
 
-          try { updateView(true); } catch (e) {
-            viewIsUpdating = false;
-            throw e;
-          }
-          viewIsUpdating = false;
-        };
+          updateView(true, config);
+        });
 
-        $scope.$on('$stateChangeSuccess', eventHook);
-        $scope.$on('$viewContentLoading', eventHook);
+        scope.$on("$destroy", function() {
+          unregister();
+        });
 
         updateView(false);
 
@@ -118,15 +122,13 @@ function $ViewDirective(   $state,   $compile,   $controller,   $injector,   $ui
           }
         }
 
-        function updateView(shouldAnimate) {
-          var locals = $state.$current && $state.$current.locals[name];
-
-          if (isDefault) {
+        function updateView(shouldAnimate, config) {
+          if (isDefault && config) {
             isDefault = false;
             element.replaceWith(anchor);
           }
 
-          if (!locals) {
+          if (!config) {
             cleanupLastView();
             currentEl = element.clone();
             currentEl.html(initial);
@@ -137,7 +139,7 @@ function $ViewDirective(   $state,   $compile,   $controller,   $injector,   $ui
             return;
           }
 
-          if (locals === viewLocals) return; // nothing to do
+          if (config === viewConfig) return; // nothing to do
 
           cleanupLastView();
 
@@ -145,24 +147,23 @@ function $ViewDirective(   $state,   $compile,   $controller,   $injector,   $ui
           currentEl.html(locals.$template ? locals.$template : initial);
           renderer(true).enter(currentEl, parentEl, anchor);
 
-          currentEl.data('$uiView', view);
+          currentEl.data('$uiView', viewData);
 
-          viewLocals = locals;
+          viewConfig = locals;
           view.state = locals.$$state;
 
           var link = $compile(currentEl.contents());
 
           currentScope = $scope.$new();
 
-          if (locals.$$controller) {
-            locals.$scope = currentScope;
-            var controller = $controller(locals.$$controller, locals);
+          if (config.$controller) {
+            config.$scope = currentScope;
+            var controller = $controller(config.$controller, config.$locals);
             currentEl.children().data('$ngControllerController', controller);
           }
 
-          link(currentScope);
-
-          currentScope.$emit('$viewContentLoaded');
+          link(currentScope); // viewScope
+          currentScope.$emit('$viewContentLoaded', copy(viewData, {}));
           if (onloadExp) currentScope.$eval(onloadExp);
 
           if (!angular.isDefined(autoscrollExp) || !autoscrollExp || $scope.$eval(autoscrollExp)) {
