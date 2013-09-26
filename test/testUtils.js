@@ -1,8 +1,22 @@
 // Promise testing support
 angular.module('ngMock').config(function ($provide) {
   $provide.decorator('$q', function ($delegate, $rootScope) {
+
+    var openDeferreds = {};
+    var nextDeferredId = 0;
+
+    $delegate.dump = function () {
+      var list = [];
+      forEach(openDeferreds, function(deferred) { list.push(deferred); });
+      if (list.length > 0) {
+        console.log('Unresolved deferreds:');
+        list.map(function(deferred) { deferred.$$dump(); });
+      }
+    };
+
     $delegate.flush = function() {
       $rootScope.$digest();
+      $delegate.dump();
     };
 
     // Add callbacks to the promise that expose the resolved value/error
@@ -35,11 +49,33 @@ angular.module('ngMock').config(function ($provide) {
 
     // Wrap defer()
     var qDefer = $delegate.defer;
+
     $delegate.defer = function () {
       var deferred = qDefer();
+
+      var id = nextDeferredId++;
+      openDeferreds[id] = deferred;
+
+      var e = new Error(id);
+      deferred.$$id = deferred.promise.$$id
+      deferred.$$stack = deferred.promise.$$stack = e.stack;
+      deferred.$$dump = function() { console.log(id, e.stack); };
+
+      var qResolve = deferred.resolve;
+      deferred.resolve = function() {
+        delete openDeferreds[id];
+        qResolve.apply(this, arguments);
+      };
+
+      var qReject = deferred.reject;
+      deferred.reject = function() {
+        delete openDeferreds[id];
+        qReject.apply(this, arguments);
+      };
+
       expose(deferred.promise);
       return deferred;
-    }
+    };
 
     return $delegate;
   });
