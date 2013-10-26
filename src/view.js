@@ -36,14 +36,12 @@ function $View(   $rootScope,   $templateFactory,   $q,   $rootScope,   $injecto
     }
   }
 
-  function resolveController(options, locals) {
+  function resolveController(options) {
     if (isFunction(options.controllerProvider) || isArray(options.controllerProvider)) {
-      return $injector.invoke(view.controllerProvider, null, locals);
+      return $injector.invoke(options.controllerProvider, null, options.locals);
     }
     return options.controller;
   }
-
-  this.$get = $get;
 
   /**
    * @ngdoc object
@@ -55,10 +53,9 @@ function $View(   $rootScope,   $templateFactory,   $q,   $rootScope,   $injecto
    * @description
    *
    */
-  $get.$inject = ['$rootScope', '$templateFactory'];
-  function $get(   $rootScope,   $templateFactory) {
+  // $get.$inject = ['$rootScope', '$templateFactory'];
+  // function $get(   $rootScope,   $templateFactory) {}
 
-    // $view.load('full.viewName', { template: ..., controller: ..., resolve: ..., async: false, params: ... })
     /**
      * @ngdoc function
      * @name ui.router.state.$view#load
@@ -113,13 +110,12 @@ function $View(   $rootScope,   $templateFactory,   $q,   $rootScope,   $injecto
         tick(fqn, options.context);
         return push(fqn, options.async, {
           $template:   results[0],
-          $controller: resolveController(options, locals),
+          $controller: resolveController(options),
           $locals:     options.locals,
           $context:    options.context
         });
       });
     };
-  }
 
   /**
    * Resets a view to its initial state.

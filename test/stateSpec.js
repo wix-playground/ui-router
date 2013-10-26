@@ -910,16 +910,16 @@ describe('state', function () {
 
       stateProvider.state('viewTest', {
         views: {
-          viewA: {},
-          viewB: {}
+          viewA: { templateProvider: function() {} },
+          viewB: { templateProvider: function() {} }
         }
       });
 
       $state.transitionTo('viewTest');
       $q.flush();
 
-      expect($state.$current.views['viewA@'].templateProvider()).toBe('Template for viewA@');
-      expect($state.$current.views['viewB@'].templateProvider()).toBe('Template for viewB@');
+      expect($state.$current.views.viewA.templateProvider()).toBe('Template for viewA');
+      expect($state.$current.views.viewB.templateProvider()).toBe('Template for viewB');
     }));
 
   });

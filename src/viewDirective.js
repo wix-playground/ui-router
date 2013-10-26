@@ -81,8 +81,8 @@ function $ViewDirective(   $state,   $view,   $compile,   $controller,   $inject
       return function ($scope) {
         var inherited = parentEl.inheritedData('$uiView');
 
-        var currentScope, currentEl, viewConfig,
-            name      = attrs[directive.name] || attrs.name || '',
+        var currentScope, currentEl, viewConfig, unregister,
+            name      = attrs[directive.name] || attrs.name || '$default',
             onloadExp = attrs.onload || '',
             autoscrollExp = attrs.autoscroll,
             renderer  = getRenderer(element, attrs, $scope);
@@ -104,7 +104,7 @@ function $ViewDirective(   $state,   $view,   $compile,   $controller,   $inject
           updateView(true, config);
         });
 
-        scope.$on("$destroy", function() {
+        $scope.$on("$destroy", function() {
           unregister();
         });
 
@@ -144,14 +144,12 @@ function $ViewDirective(   $state,   $view,   $compile,   $controller,   $inject
           cleanupLastView();
 
           currentEl = element.clone();
-          currentEl.html(locals.$template ? locals.$template : initial);
+          currentEl.html(config.$template ? config.$template : initial);
           renderer(true).enter(currentEl, parentEl, anchor);
 
           currentEl.data('$uiView', viewData);
 
-          viewConfig = locals;
-          view.state = locals.$$state;
-
+          viewConfig = config;
           var link = $compile(currentEl.contents());
 
           currentScope = $scope.$new();

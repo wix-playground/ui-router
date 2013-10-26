@@ -107,10 +107,8 @@ describe('uiView', function () {
       $state.transitionTo(aState);
       $q.flush();
 
-      if ($animate) {
-        expect($animate.flushNext('leave').element.text()).toBe('');
-        expect($animate.flushNext('enter').element.text()).toBe(aState.template);
-      }
+      if ($animate) $animate.flush();
+      expect(elem.find('ui-view').text()).toBe(aState.template);
     }));
 
     it('named ui-view should be replaced with the template of the current $state', inject(function ($state, $q, $animate) {
@@ -151,12 +149,10 @@ describe('uiView', function () {
       $state.transitionTo(dState);
       $q.flush();
 
-      if ($animate) {
-        expect($animate.flushNext('leave').element.html()).toBe('');
-        expect($animate.flushNext('enter').element.text()).toBe(dState.views.dview1.template);
-        expect($animate.flushNext('leave').element.html()).toBe('');
-        expect($animate.flushNext('enter').element.text()).toBe(dState.views.dview2.template);
-      }
+      if ($animate) $animate.flush();
+
+      expect(angular.element(elem[0].querySelector(".dview1")).text()).toBe(dState.views.dview1.template);
+      expect(angular.element(elem[0].querySelector(".dview2")).text()).toBe(dState.views.dview2.template);
     }));
 
     it('should handle nested ui-views (testing two levels deep)', inject(function ($state, $q, $animate) {
@@ -165,40 +161,37 @@ describe('uiView', function () {
       $state.transitionTo(fState);
       $q.flush();
 
-      if ($animate) {
-        expect($animate.flushNext('leave').element.text()).toBe('');
-        expect($animate.flushNext('enter').element.parent().find('.view')).toMatchText('');
+      if ($animate) $animate.flush();
 
-        var target = $animate.flushNext('enter').element;
-        expect(target).toHaveClass('eview');
-        expect(target).toMatchText(fState.views.eview.template);
-      }
+      expect(elem.find("div")[1]).toHaveClass('eview');
+      expect(elem.text()).toBe(fState.views.eview.template);
     }));
   });
 
   describe('handling initial view', function () {
     it('initial view should be compiled if the view is empty', inject(function ($state, $q, $animate) {
       var content = 'inner content';
-      elem.append($compile('<div><ui-view></ui-view></div')(scope));
+      elem.append($compile('<div><ui-view></ui-view></div>')(scope));
       scope.$apply('content = "' + content + '"');
 
       $state.transitionTo(gState);
       $q.flush();
 
-      if ($animate) {
-        var target = $animate.flushNext('leave').element;
-        expect(target.text()).toBe("");
+      if ($animate) $animate.flush();
+      debugger;
 
-        $animate.flushNext('enter');
-        $animate.flushNext('leave');
-        $animate.flushNext('enter');
-        $animate.flushNext('addClass');
-        $animate.flushNext('addClass');
+      var target = $animate.flushNext('leave').element;
+      expect(target.text()).toBe("");
 
-        target = $animate.flushNext('addClass').element;
-        expect(target).toHaveClass('test');
-        expect(target.text()).toBe(content);
-      }
+      $animate.flushNext('enter');
+      $animate.flushNext('leave');
+      $animate.flushNext('enter');
+      $animate.flushNext('addClass');
+      $animate.flushNext('addClass');
+
+      target = $animate.flushNext('addClass').element;
+      expect(target).toHaveClass('test');
+      expect(target.text()).toBe(content);
     }));
 
     it('initial view should be put back after removal of the view', inject(function ($state, $q, $animate) {
