@@ -23,6 +23,7 @@ function $View(   $rootScope,   $templateFactory,   $q,   $rootScope,   $injecto
   function pop(name, callback) {
     if (queued[name]) {
       callback(queued[name]);
+      views[name].$config = queued[name];
       delete queued[name];
     }
   }
