@@ -108,7 +108,9 @@ function $ViewDirective(   $state,   $view,   $compile,   $controller,   $inject
           unregister();
         });
 
-        updateView(false);
+        // Check if the $view.register callback beat us to it
+        if(!viewConfig)
+          updateView(false);
 
         function cleanupLastView() {
           if (currentEl) {
