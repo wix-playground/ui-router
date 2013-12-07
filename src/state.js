@@ -595,6 +595,7 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
         toParams = redirect.toParams;
         opts = redirect.options;
         toState = findState(to, opts.relative);
+
         if (!isDefined(toState)) {
           if (opts.relative) throw new Error("Could not resolve '" + to + "' from state '" + opts.relative + "'");
           throw new Error("No such state '" + to + "'");
@@ -885,9 +886,10 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       // to the set that should be visible to the state, and are independent of when we update
       // the global $state and $stateParams values.
       dst.resolve = $resolve.resolve(state.resolve, locals, dst.resolve, state);
-      var promises = [ dst.resolve.then(function (globals) {
+
+      var promises = [dst.resolve.then(function (globals) {
         dst.globals = globals;
-      }) ];
+      })];
       if (inherited) promises.push(inherited);
 
       // Resolve template and dependencies for all views.

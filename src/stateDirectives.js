@@ -85,7 +85,7 @@ function $StateRefDirective($state, $timeout) {
       };
 
       if (ref.paramExpr) {
-        scope.$watch(ref.paramExpr, function(newVal, oldVal) {
+        scope.$watch(ref.paramExpr, function(newVal) {
           if (newVal !== params) update(newVal);
         }, true);
         params = scope.$eval(ref.paramExpr);
