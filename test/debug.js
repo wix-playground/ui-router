@@ -24,6 +24,7 @@ module.exports = function(config) {
       '../src/viewScroll.js',
       '../src/viewDirective.js',
       '../src/stateDirectives.js',
+      '../src/stateFilters.js',
       '../src/compat.js',
 
       '../test/*Spec.js',

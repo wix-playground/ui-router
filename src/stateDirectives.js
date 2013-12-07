@@ -65,6 +65,10 @@ function $StateRefDirective($state, $timeout) {
 
       var update = function(newVal) {
         if (newVal) params = newVal;
+
+        if (uiSrefActive) {
+          uiSrefActive.$$setStateInfo(ref.state, params);
+        }
         if (!nav) return;
 
         var newHref = $state.href(ref.state, params, { relative: base() });
@@ -144,7 +148,7 @@ function $StateActiveDirective($state, $stateParams, $interpolate) {
 
       // Allow uiSref to communicate with uiSrefActive
       this.$$setStateInfo = function(newState, newParams) {
-        state = $state.get(newState, stateContext($element));
+        state = $state.get(newState, stateContext($element) || $state.$current);
         params = newParams;
         update();
       };
@@ -153,7 +157,7 @@ function $StateActiveDirective($state, $stateParams, $interpolate) {
 
       // Update route state
       function update() {
-        if ($state.$current.self === state && matchesParams()) {
+        if ($state.current === state && matchesParams()) {
           $element.addClass(activeClass);
         } else {
           $element.removeClass(activeClass);

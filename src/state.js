@@ -625,7 +625,7 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       // TODO: We may not want to bump 'transition' if we're called from a location change
       // that we've initiated ourselves, because we might accidentally abort a legitimate
       // transition initiated from code?
-      if (to === from && locals === from.locals && !opts.reload) {
+      if (shouldTriggerReload(to, from, locals, opts)) {
         if (to.self.reloadOnSearch !== false) syncUrl();
         $state.transition = null;
         return $q.when($state.current);

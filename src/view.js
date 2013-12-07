@@ -1,5 +1,5 @@
-$View.$inject = ['$rootScope', '$templateFactory', '$q', '$rootScope', '$injector'];
-function $View(   $rootScope,   $templateFactory,   $q,   $rootScope,   $injector) {
+$View.$inject = ['$rootScope', '$templateFactory', '$q', '$injector'];
+function $View(   $rootScope,   $templateFactory,   $q,   $injector) {
 
   var views = {}, queued = {}, waiting = [];
 

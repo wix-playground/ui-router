@@ -260,7 +260,7 @@ describe('uiStateRef', function() {
 });
 
 describe('uiSrefActive', function() {
-    var el, template, scope, document;
+    var el, template, scope;
 
   beforeEach(module('ui.router'));
 
@@ -269,11 +269,7 @@ describe('uiSrefActive', function() {
       url: '',
     }).state('contacts', {
       url: '/contacts',
-      views: {
-        '@': {
-          template: '<a ui-sref=".item({ id: 6 })" ui-sref-active="active">Contacts</a>'
-        }
-      }
+      template: '<a ui-sref=".item({ id: 6 })" ui-sref-active="active">Contact 6</a>'
     }).state('contacts.item', {
       url: '/:id',
     }).state('contacts.item.detail', {
@@ -281,9 +277,6 @@ describe('uiSrefActive', function() {
     });
   }));
 
-  beforeEach(inject(function($document) {
-    document = $document[0];
-  }));
 
   it('should update class for sibling uiSref', inject(function($rootScope, $q, $compile, $state) {
     el = angular.element('<div><a ui-sref="contacts" ui-sref-active="active">Contacts</a></div>');
