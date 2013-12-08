@@ -3,6 +3,23 @@ function $View(   $rootScope,   $templateFactory,   $q,   $injector) {
 
   var views = {}, queued = {}, waiting = [];
 
+  /**
+   * Pushes a view configuration to be assigned to a named `uiView` element that either already
+   * exists, or is waiting to be created. If the view identified by `name` exists, the
+   * configuration will be assigned immediately. If it does not, and `async` is `true`, the
+   * configuration will be queued for assignment until the view exists.
+   *
+   * @param {String} name The fully-qualified view name the configuration should be assigned to.
+   * @param {Boolean} async Determines whether the configuration can be queued if the view does
+   *                        not currently exist on the page. If the view does not exist and
+   *                        `async` is `false`, will return a rejected promise.
+   * @param {Object} config The view configuration to be assigned to the named `uiView`. Should
+   *                        include a `$template` key containing the HTML string to render, and
+   *                        can optionally include a `$controller`, `$locals`, and a `$context`
+   *                        object, which represents the object responsibile for the view (i.e.
+   *                        a UI state object), that can be used to look up the view later by a
+   *                        relative/non-fully-qualified name.
+   */
   function push(name, async, config) {
     if (config && config.$context && waiting.length) {
       tick(name, config.$context);
@@ -20,6 +37,13 @@ function $View(   $rootScope,   $templateFactory,   $q,   $injector) {
   }
 
 
+  /**
+   * Pops a queued view configuration for a `uiView` that has come into existence.
+   *
+   * @param {String} name The fully-qualified dot-separated name of the view.
+   * @param {Function} callback The initialization function passed by `uiView` to
+   *                            `$view.register()`.
+   */
   function pop(name, callback) {
     if (queued[name]) {
       callback(queued[name]);
@@ -29,6 +53,15 @@ function $View(   $rootScope,   $templateFactory,   $q,   $injector) {
   }
 
 
+  /**
+   * Invoked when views have been queued for which fully-qualified names cannot be resolved
+   * (i.e. the parent view exists but has not been loaded/configured yet). Checks the list to
+   * see if the context of the most-recently-resolved view matches the parent context being
+   * waited for.
+   *
+   * @param {String} name The name of the loaded view.
+   * @param {Object} context The context object responsible for the view.
+   */
   function tick(name, context) {
     for (var i = waiting.length - 1; i >= 0; i--) {
       if (waiting[i].context === context) {
@@ -37,6 +70,14 @@ function $View(   $rootScope,   $templateFactory,   $q,   $injector) {
     }
   }
 
+  /**
+   * Returns a controller from a hash of options, either by executing an injectable
+   * `controllerProvider` function, or by returning the value of the `controller` key.
+   *
+   * @param {Object} options An object hash with either a `controllerProvider` key or a
+   *                         `controller` key.
+   * @return {*} Returns a controller.
+   */
   function resolveController(options) {
     if (isFunction(options.controllerProvider) || isArray(options.controllerProvider)) {
       return $injector.invoke(options.controllerProvider, null, options.locals);
