@@ -113,8 +113,6 @@ function $View(   $rootScope,   $templateFactory,   $q,   $injector) {
         template:           undefined,
         templateUrl:        undefined,
         templateProvider:   undefined,
-        templateUrl:        undefined,
-        templateProvider:   undefined,
         controller:         null,
         controllerProvider: null,
         context:            null,
