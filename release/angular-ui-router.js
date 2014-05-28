@@ -1,6 +1,6 @@
 /**
  * State-based routing for AngularJS
- * @version v0.2.10
+ * @version v0.2.10-dev-2014-05-28
  * @link http://angular-ui.github.com/
  * @license MIT License, http://www.opensource.org/licenses/MIT
  */
@@ -653,6 +653,7 @@ angular.module('ui.router.util').service('$templateFactory', $TemplateFactory);
  * * `'/files/*path'` - ditto.
  *
  * @param {string} pattern  the pattern to compile into a matcher.
+ * @param {bool} caseInsensitiveMatch true if url matching should be case insensitive, otherwise false, the default value (for backward compatibility) is false.
  *
  * @property {string} prefix  A static prefix of this pattern. The matcher guarantees that any
  *   URL matching this matcher (i.e. any string for which {@link ui.router.util.type:UrlMatcher#methods_exec exec()} returns
@@ -669,7 +670,7 @@ angular.module('ui.router.util').service('$templateFactory', $TemplateFactory);
  *
  * @returns {Object}  New UrlMatcher object
  */
-function UrlMatcher(pattern) {
+function UrlMatcher(pattern, caseInsensitiveMatch) {
 
   // Find all placeholders and create a compiled pattern, using either classic or curly syntax:
   //   '*' name
@@ -733,7 +734,12 @@ function UrlMatcher(pattern) {
 
   compiled += quoteRegExp(segment) + '$';
   segments.push(segment);
-  this.regexp = new RegExp(compiled);
+  if(caseInsensitiveMatch){
+    this.regexp = new RegExp(compiled, 'i');
+  }else{
+    this.regexp = new RegExp(compiled);	
+  }
+  
   this.prefix = segments[0];
 }
 
@@ -877,6 +883,22 @@ UrlMatcher.prototype.format = function (values) {
  */
 function $UrlMatcherFactory() {
 
+  var useCaseInsensitiveMatch = false;
+
+  /**
+   * @ngdoc function
+   * @name ui.router.util.$urlMatcherFactory#caseInsensitiveMatch
+   * @methodOf ui.router.util.$urlMatcherFactory
+   *
+   * @description
+   * Define if url matching should be case sensistive, the default behavior, or not.
+   *   
+   * @param {bool} value false to match URL in a case sensitive manner; otherwise true;
+   */
+  this.caseInsensitiveMatch = function(value){
+    useCaseInsensitiveMatch = value;
+  };
+
   /**
    * @ngdoc function
    * @name ui.router.util.$urlMatcherFactory#compile
@@ -889,7 +911,7 @@ function $UrlMatcherFactory() {
    * @returns {ui.router.util.type:UrlMatcher}  The UrlMatcher.
    */
   this.compile = function (pattern) {
-    return new UrlMatcher(pattern);
+    return new UrlMatcher(pattern, useCaseInsensitiveMatch);
   };
 
   /**
@@ -1737,6 +1759,7 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
     var TransitionFailed = $q.reject(new Error('transition failed'));
     var currentLocation = $location.url();
     var baseHref = $browser.baseHref();
+    var detachedStateStack = [];
 
     function syncUrl() {
       if ($location.url() !== currentLocation) {
@@ -1750,8 +1773,26 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       params: {},
       current: root.self,
       $current: root,
+      $detached: null,
+      $detachedStateParams: {},
       transition: null
     };
+
+    $rootScope.$on('$stateDetach', function () {
+      detachedStateStack.push({
+        $detached: $state.$detached,
+        $detachedStateParams: $state.$detachedStateParams
+      });
+
+      $state.$detached = $state.$current;
+      $state.$detachedStateParams = angular.copy($stateParams);
+    });
+    $rootScope.$on('$stateAttach', function () {
+      var detachedState = detachedStateStack.pop();
+
+      $state.$detached = detachedState.$detached;
+      $state.$detachedStateParams = detachedState.$detachedStateParams;
+    });
 
     /**
      * @ngdoc function
@@ -1978,12 +2019,35 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
 
       var toPath = to.path;
 
+      if ($state.$current.toString() === '') {
+        var realTransitionTo = function () {
+          return $state.transitionTo(to, toParams, options);
+        };
+        var stateChecked = to;
+        do {
+          if (stateChecked.self.needsState) {
+            return $state.transitionTo(stateChecked.self.needsStateDefault, stateChecked.self.needsStateDefaultParams || {}, { location: false })
+              .then(realTransitionTo);
+          }
+          stateChecked = stateChecked.parent;
+        } while (stateChecked);
+      }
+
       // Starting from the root of the path, keep all levels that haven't changed
       var keep, state, locals = root.locals, toLocals = [];
-      for (keep = 0, state = toPath[keep];
-           state && state === fromPath[keep] && equalForKeys(toParams, fromParams, state.ownParams) && !options.reload;
-           keep++, state = toPath[keep]) {
-        locals = toLocals[keep] = state.locals;
+      if ($state.$detached && to === $state.$detached && equalForKeys($state.$detachedStateParams, toParams)) {
+        // Keep all locals from last state
+        for (keep = 0; keep < $state.$detached.path.length; keep++) {
+          locals = toLocals[keep] = $state.$detached.path[keep].locals;
+        }
+        keep = 0;
+      } else {
+        // Starting from the root of the path, keep all levels that haven't changed
+        for (keep = 0, state = toPath[keep];
+             state && state === fromPath[keep] && equalForKeys(toParams, fromParams, state.ownParams) && !options.reload;
+             keep++, state = toPath[keep]) {
+          locals = toLocals[keep] = state.locals;
+        }
       }
 
       // If we're going to the same state and all locals are kept, we've got nothing to do.
@@ -2044,9 +2108,11 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       // empty and gets filled asynchronously. We need to keep track of the promise for the
       // (fully resolved) current locals, and pass this down the chain.
       var resolved = $q.when(locals);
-      for (var l=keep; l<toPath.length; l++, state=toPath[l]) {
-        locals = toLocals[l] = inherit(locals);
-        resolved = resolveState(state, toParams, state===to, resolved, locals);
+      if (!($state.$detached && to === $state.$detached && equalForKeys($state.$detachedStateParams, toParams))) {
+        for (var l=keep; l<toPath.length; l++, state=toPath[l]) {
+          locals = toLocals[l] = inherit(locals);
+          resolved = resolveState(state, toParams, state===to, resolved, locals);
+        }
       }
 
       // Once everything is resolved, we are ready to perform the actual transition
@@ -2054,17 +2120,28 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       // current promise is, so that we can detect overlapping transitions and
       // keep only the outcome of the last transition.
       var transition = $state.transition = resolved.then(function () {
-        var l, entering, exiting;
+        var l, entering, exiting, toDetached;
 
         if ($state.transition !== transition) return TransitionSuperseded;
+
+        for (l = keep; l < toPath.length ; l++) {
+          if (toPath[l].self.detached) {
+            toDetached = true;
+          }
+        }
 
         // Exit 'from' states not kept
         for (l=fromPath.length-1; l>=keep; l--) {
           exiting = fromPath[l];
           if (exiting.self.onExit) {
             $injector.invoke(exiting.self.onExit, exiting.self, exiting.locals.globals);
+            if (exiting.self.detached && !toDetached) {
+              $rootScope.$broadcast('$stateAttach');
+            }
           }
-          exiting.locals = null;
+          if (!toDetached) {
+            exiting.locals = null;
+          }
         }
 
         // Enter 'to' states not kept
@@ -2072,6 +2149,9 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
           entering = toPath[l];
           entering.locals = toLocals[l];
           if (entering.self.onEnter) {
+            if (entering.self.detached) {
+              $rootScope.$broadcast('$stateDetach');
+            }
             $injector.invoke(entering.self.onEnter, entering.self, entering.locals.globals);
           }
         }
@@ -2691,13 +2771,20 @@ function $ViewDirective(   $state,   $injector,   $uiViewScroll) {
         var previousEl, currentEl, currentScope, latestLocals,
             onloadExp     = attrs.onload || '',
             autoScrollExp = attrs.autoscroll,
-            renderer      = getRenderer(attrs, scope);
+            renderer      = getRenderer(attrs, scope),
+            stateDetached = 0;
 
         scope.$on('$stateChangeSuccess', function() {
           updateView(false);
         });
         scope.$on('$viewContentLoading', function() {
           updateView(false);
+        });
+        scope.$on('$stateDetach', function () {
+          stateDetached++;
+        });
+        scope.$on('$stateAttach', function () {
+          stateDetached--;
         });
 
         updateView(true);
@@ -2727,6 +2814,10 @@ function $ViewDirective(   $state,   $injector,   $uiViewScroll) {
           var newScope        = scope.$new(),
               name            = currentEl && currentEl.data('$uiViewName'),
               previousLocals  = name && $state.$current && $state.$current.locals[name];
+
+          if (stateDetached) {
+            return;
+          }
 
           if (!firstTime && previousLocals === latestLocals) return; // nothing to do
 
@@ -3004,7 +3095,7 @@ function $StateActiveDirective($state, $stateParams, $interpolate) {
   return {
     restrict: "A",
     controller: ['$scope', '$element', '$attrs', function($scope, $element, $attrs) {
-      var state, params, activeClass;
+      var state, stateDetached = 0, params, activeClass;
 
       // There probably isn't much point in $observing this
       activeClass = $interpolate($attrs.uiSrefActive || '', false)($scope);
@@ -3017,9 +3108,18 @@ function $StateActiveDirective($state, $stateParams, $interpolate) {
       };
 
       $scope.$on('$stateChangeSuccess', update);
+      $scope.$on('$stateDetach', function () {
+        stateDetached++;
+      });
+      $scope.$on('$stateAttach', function () {
+        stateDetached--;
+      });
 
       // Update route state
       function update() {
+        if (stateDetached) {
+          return;
+        }
         if ($state.$current.self === state && matchesParams()) {
           $element.addClass(activeClass);
         } else {

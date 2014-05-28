@@ -545,6 +545,7 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
     var TransitionFailed = $q.reject(new Error('transition failed'));
     var currentLocation = $location.url();
     var baseHref = $browser.baseHref();
+    var detachedStateStack = [];
 
     function syncUrl() {
       if ($location.url() !== currentLocation) {
@@ -558,8 +559,26 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       params: {},
       current: root.self,
       $current: root,
+      $detached: null,
+      $detachedStateParams: {},
       transition: null
     };
+
+    $rootScope.$on('$stateDetach', function () {
+      detachedStateStack.push({
+        $detached: $state.$detached,
+        $detachedStateParams: $state.$detachedStateParams
+      });
+
+      $state.$detached = $state.$current;
+      $state.$detachedStateParams = angular.copy($stateParams);
+    });
+    $rootScope.$on('$stateAttach', function () {
+      var detachedState = detachedStateStack.pop();
+
+      $state.$detached = detachedState.$detached;
+      $state.$detachedStateParams = detachedState.$detachedStateParams;
+    });
 
     /**
      * @ngdoc function
@@ -786,12 +805,35 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
 
       var toPath = to.path;
 
+      if ($state.$current.toString() === '') {
+        var realTransitionTo = function () {
+          return $state.transitionTo(to, toParams, options);
+        };
+        var stateChecked = to;
+        do {
+          if (stateChecked.self.needsState) {
+            return $state.transitionTo(stateChecked.self.needsStateDefault, stateChecked.self.needsStateDefaultParams || {}, { location: false })
+              .then(realTransitionTo);
+          }
+          stateChecked = stateChecked.parent;
+        } while (stateChecked);
+      }
+
       // Starting from the root of the path, keep all levels that haven't changed
       var keep, state, locals = root.locals, toLocals = [];
-      for (keep = 0, state = toPath[keep];
-           state && state === fromPath[keep] && equalForKeys(toParams, fromParams, state.ownParams) && !options.reload;
-           keep++, state = toPath[keep]) {
-        locals = toLocals[keep] = state.locals;
+      if ($state.$detached && to === $state.$detached && equalForKeys($state.$detachedStateParams, toParams)) {
+        // Keep all locals from last state
+        for (keep = 0; keep < $state.$detached.path.length; keep++) {
+          locals = toLocals[keep] = $state.$detached.path[keep].locals;
+        }
+        keep = 0;
+      } else {
+        // Starting from the root of the path, keep all levels that haven't changed
+        for (keep = 0, state = toPath[keep];
+             state && state === fromPath[keep] && equalForKeys(toParams, fromParams, state.ownParams) && !options.reload;
+             keep++, state = toPath[keep]) {
+          locals = toLocals[keep] = state.locals;
+        }
       }
 
       // If we're going to the same state and all locals are kept, we've got nothing to do.
@@ -852,9 +894,11 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       // empty and gets filled asynchronously. We need to keep track of the promise for the
       // (fully resolved) current locals, and pass this down the chain.
       var resolved = $q.when(locals);
-      for (var l=keep; l<toPath.length; l++, state=toPath[l]) {
-        locals = toLocals[l] = inherit(locals);
-        resolved = resolveState(state, toParams, state===to, resolved, locals);
+      if (!($state.$detached && to === $state.$detached && equalForKeys($state.$detachedStateParams, toParams))) {
+        for (var l=keep; l<toPath.length; l++, state=toPath[l]) {
+          locals = toLocals[l] = inherit(locals);
+          resolved = resolveState(state, toParams, state===to, resolved, locals);
+        }
       }
 
       // Once everything is resolved, we are ready to perform the actual transition
@@ -862,17 +906,28 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
       // current promise is, so that we can detect overlapping transitions and
       // keep only the outcome of the last transition.
       var transition = $state.transition = resolved.then(function () {
-        var l, entering, exiting;
+        var l, entering, exiting, toDetached;
 
         if ($state.transition !== transition) return TransitionSuperseded;
+
+        for (l = keep; l < toPath.length ; l++) {
+          if (toPath[l].self.detached) {
+            toDetached = true;
+          }
+        }
 
         // Exit 'from' states not kept
         for (l=fromPath.length-1; l>=keep; l--) {
           exiting = fromPath[l];
           if (exiting.self.onExit) {
             $injector.invoke(exiting.self.onExit, exiting.self, exiting.locals.globals);
+            if (exiting.self.detached && !toDetached) {
+              $rootScope.$broadcast('$stateAttach');
+            }
           }
-          exiting.locals = null;
+          if (!toDetached) {
+            exiting.locals = null;
+          }
         }
 
         // Enter 'to' states not kept
@@ -880,6 +935,9 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory,           $
           entering = toPath[l];
           entering.locals = toLocals[l];
           if (entering.self.onEnter) {
+            if (entering.self.detached) {
+              $rootScope.$broadcast('$stateDetach');
+            }
             $injector.invoke(entering.self.onEnter, entering.self, entering.locals.globals);
           }
         }

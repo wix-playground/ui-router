@@ -191,7 +191,7 @@ function $StateActiveDirective($state, $stateParams, $interpolate) {
   return {
     restrict: "A",
     controller: ['$scope', '$element', '$attrs', function($scope, $element, $attrs) {
-      var state, params, activeClass;
+      var state, stateDetached = 0, params, activeClass;
 
       // There probably isn't much point in $observing this
       activeClass = $interpolate($attrs.uiSrefActive || '', false)($scope);
@@ -204,9 +204,18 @@ function $StateActiveDirective($state, $stateParams, $interpolate) {
       };
 
       $scope.$on('$stateChangeSuccess', update);
+      $scope.$on('$stateDetach', function () {
+        stateDetached++;
+      });
+      $scope.$on('$stateAttach', function () {
+        stateDetached--;
+      });
 
       // Update route state
       function update() {
+        if (stateDetached) {
+          return;
+        }
         if ($state.$current.self === state && matchesParams()) {
           $element.addClass(activeClass);
         } else {
