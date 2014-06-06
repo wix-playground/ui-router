@@ -222,7 +222,7 @@ function $StateRefActiveDirective($state, $stateParams, $interpolate) {
   return  {
     restrict: "A",
     controller: ['$scope', '$element', '$attrs', function ($scope, $element, $attrs) {
-      var state, params, activeClass;
+      var state, stateDetached = 0, params, activeClass;
 
       // There probably isn't much point in $observing this
       // uiSrefActive and uiSrefActiveEq share the same directive object with some
@@ -237,9 +237,18 @@ function $StateRefActiveDirective($state, $stateParams, $interpolate) {
       };
 
       $scope.$on('$stateChangeSuccess', update);
+      $scope.$on('$stateDetach', function () {
+        stateDetached++;
+      });
+      $scope.$on('$stateAttach', function () {
+        stateDetached--;
+      });
 
       // Update route state
       function update() {
+        if (stateDetached) {
+          return;
+        }
         if (isMatch()) {
           $element.addClass(activeClass);
         } else {
