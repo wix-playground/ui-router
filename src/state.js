@@ -628,7 +628,7 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory) {
       });
 
       $state.$detached = $state.$current;
-      $state.$detachedStateParams = angular.copy($stateParams);
+      $state.$detachedStateParams = copy($stateParams);
     });
     $rootScope.$on('$stateAttach', function () {
       var detachedState = detachedStateStack.pop();
@@ -901,9 +901,9 @@ function $StateProvider(   $urlRouterProvider,   $urlMatcherFactory) {
       var resolved = $q.when(locals);
 
       if (!($state.$detached && to === $state.$detached && equalForKeys($state.$detachedStateParams, toParams))) {
-        for (var l=keep; l<toPath.length; l++, state=toPath[l]) {
+        for (var l = keep; l < toPath.length; l++, state = toPath[l]) {
           locals = toLocals[l] = inherit(locals);
-          resolved = resolveState(state, toParams, state===to, resolved, locals);
+          resolved = resolveState(state, toParams, state === to, resolved, locals);
         }
       }
 
