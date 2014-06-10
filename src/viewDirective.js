@@ -169,13 +169,20 @@ function $ViewDirective(   $state,   $injector,   $uiViewScroll) {
         var previousEl, currentEl, currentScope, latestLocals,
             onloadExp     = attrs.onload || '',
             autoScrollExp = attrs.autoscroll,
-            renderer      = getRenderer(attrs, scope);
+            renderer      = getRenderer(attrs, scope),
+            stateDetached = 0;
 
         scope.$on('$stateChangeSuccess', function() {
           updateView(false);
         });
         scope.$on('$viewContentLoading', function() {
           updateView(false);
+        });
+        scope.$on('$stateDetach', function () {
+          stateDetached++;
+        });
+        scope.$on('$stateAttach', function () {
+          stateDetached--;
         });
 
         updateView(true);
@@ -205,6 +212,10 @@ function $ViewDirective(   $state,   $injector,   $uiViewScroll) {
           var newScope        = scope.$new(),
               name            = currentEl && currentEl.data('$uiViewName'),
               previousLocals  = name && $state.$current && $state.$current.locals[name];
+
+          if (stateDetached) {
+            return;
+          }
 
           if (!firstTime && previousLocals === latestLocals) return; // nothing to do
 
